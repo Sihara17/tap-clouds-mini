@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import DappPortalSDK from "@linenext/dapp-portal-sdk"
 
-// Types for LINE user profile
 interface LineProfile {
   userId: string
   displayName: string
@@ -25,87 +25,68 @@ export function useLineAuth() {
     error: null,
   })
 
-  // Initialize LINE SDK
-  useEffect(() => {
-    const initializeLine = async () => {
-      try {
-        // Check if LINE SDK is available
-        if (typeof window !== "undefined" && window.liff) {
-          await window.liff.init({
-            liffId: process.env.NEXT_PUBLIC_LINE_LIFF_ID || "your-liff-id",
-          })
+  const [sdk, setSdk] = useState<any>(null)
 
-          // Check if user is already logged in
-          if (window.liff.isLoggedIn()) {
-            const profile = await window.liff.getProfile()
-            setAuthState({
-              isAuthenticated: true,
-              user: {
-                userId: profile.userId,
-                displayName: profile.displayName,
-                pictureUrl: profile.pictureUrl,
-                statusMessage: profile.statusMessage,
-              },
-              isLoading: false,
-              error: null,
-            })
-          } else {
-            setAuthState((prev) => ({ ...prev, isLoading: false }))
-          }
+  // Initialize Dapp SDK
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const clientId = process.env.NEXT_PUBLIC_LINE_CLIENT_ID!
+        const chainId = "1001" // default Kaia testnet
+
+        const instance = await DappPortalSDK.init({ clientId, chainId })
+        setSdk(instance)
+
+        const isConnected = await instance.isAuthorized()
+
+        if (isConnected) {
+          const user = await instance.getUser()
+          setAuthState({
+            isAuthenticated: true,
+            user: {
+              userId: user.userId,
+              displayName: user.displayName,
+              pictureUrl: user.pictureUrl,
+              statusMessage: "",
+            },
+            isLoading: false,
+            error: null,
+          })
         } else {
-          // Fallback for development/demo
           setAuthState((prev) => ({ ...prev, isLoading: false }))
         }
       } catch (error) {
+        console.error("Dapp SDK init failed:", error)
         setAuthState({
           isAuthenticated: false,
           user: null,
           isLoading: false,
-          error: "Failed to initialize LINE SDK",
+          error: "Failed to initialize LINE Dapp SDK",
         })
       }
     }
 
-    initializeLine()
+    init()
   }, [])
 
   const login = useCallback(async () => {
-    try {
-      setAuthState((prev) => ({ ...prev, isLoading: true, error: null }))
+    if (!sdk) return
 
-      if (typeof window !== "undefined" && window.liff) {
-        if (!window.liff.isLoggedIn()) {
-          window.liff.login()
-        } else {
-          const profile = await window.liff.getProfile()
-          setAuthState({
-            isAuthenticated: true,
-            user: {
-              userId: profile.userId,
-              displayName: profile.displayName,
-              pictureUrl: profile.pictureUrl,
-              statusMessage: profile.statusMessage,
-            },
-            isLoading: false,
-            error: null,
-          })
-        }
-      } else {
-        // Demo mode - simulate login
-        setTimeout(() => {
-          setAuthState({
-            isAuthenticated: true,
-            user: {
-              userId: "demo-user-123",
-              displayName: "Demo User",
-              pictureUrl: "/placeholder-user.jpg",
-              statusMessage: "Playing TapCloud!",
-            },
-            isLoading: false,
-            error: null,
-          })
-        }, 1000)
-      }
+    try {
+      await sdk.connect()
+
+      const user = await sdk.getUser()
+      setAuthState({
+        isAuthenticated: true,
+        user: {
+          userId: user.userId,
+          displayName: user.displayName,
+          pictureUrl: user.pictureUrl,
+          statusMessage: "",
+        },
+        isLoading: false,
+        error: null,
+      })
     } catch (error) {
       setAuthState((prev) => ({
         ...prev,
@@ -113,12 +94,12 @@ export function useLineAuth() {
         error: "Login failed",
       }))
     }
-  }, [])
+  }, [sdk])
 
   const logout = useCallback(async () => {
     try {
-      if (typeof window !== "undefined" && window.liff && window.liff.isLoggedIn()) {
-        window.liff.logout()
+      if (sdk) {
+        await sdk.logout()
       }
 
       setAuthState({
@@ -133,18 +114,11 @@ export function useLineAuth() {
         error: "Logout failed",
       }))
     }
-  }, [])
+  }, [sdk])
 
   return {
     ...authState,
     login,
     logout,
-  }
-}
-
-// Extend Window interface for LINE SDK
-declare global {
-  interface Window {
-    liff: any
   }
 }
