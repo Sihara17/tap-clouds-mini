@@ -1,7 +1,9 @@
-import type React from "react"
-import type { Metadata } from "next"
+// app/layout.tsx
 import "./globals.css"
+import type { Metadata } from "next"
 import Script from "next/script"
+import { WagmiConfig } from "wagmi"
+import { config } from "@/lib/wagmi"
 
 export const metadata: Metadata = {
   title: "TapCloud - LINE Mini App",
@@ -11,16 +13,23 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
     <html lang="en">
       <head>
-        {/* LINE SDK */}
-        <Script src="https://static.line-scdn.net/liff/edge/2/sdk.js" strategy="beforeInteractive" />
+        {/* LINE LIFF SDK */}
+        <Script
+          src="https://static.line-scdn.net/liff/edge/2/sdk.js"
+          strategy="beforeInteractive"
+        />
       </head>
-      <body>{children}</body>
+      <body suppressHydrationWarning={true}>
+        <WagmiConfig config={config}>
+          {children}
+        </WagmiConfig>
+      </body>
     </html>
   )
 }

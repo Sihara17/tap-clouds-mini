@@ -1,29 +1,25 @@
+
 "use client"
 
 import { useAccount, useConnect, useDisconnect } from "wagmi"
-import { InjectedConnector } from "wagmi/connectors/injected"
 
 export function useWalletConnect() {
   const { address, isConnected } = useAccount()
-  const { connect, isLoading: isConnecting, error } = useConnect({
-    connector: new InjectedConnector(),
-  })
+  const { connect, connectors, isPending } = useConnect()
   const { disconnect } = useDisconnect()
 
   const handleConnect = async () => {
-    try {
-      await connect()
-    } catch (e) {
-      console.error("Wallet connection error:", e)
+    const injected = connectors.find(c => c.id === "injected")
+    if (injected) {
+      await connect({ connector: injected })
     }
   }
 
   return {
-    isConnected,
     address,
-    connect: handleConnect,
+    isConnected,
+    handleConnect,
     disconnect,
-    isConnecting,
-    error,
+    isPending,
   }
 }
