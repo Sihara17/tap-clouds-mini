@@ -7,6 +7,8 @@ import { Cloud, Home, Zap, Target, Loader2, Database, AlertTriangle } from "luci
 import { useLineAuth } from "@/hooks/use-line-auth"
 import { useSupabaseGame } from "@/hooks/use-supabase-game"
 import { UserProfile } from "@/components/user-profile"
+import { UserProfile } from "@/components/UserProfile"
+import { ConnectWalletBox } from "@/components/ConnectWalletBox"
 
 export default function TapCloudApp() {
   const [currentScreen, setCurrentScreen] = useState("main")
@@ -37,7 +39,15 @@ export default function TapCloudApp() {
     clicksMade: 0,
     energyUsed: 0,
   })
-
+  export default function HomePage() {
+  return (
+    <main className="p-4">
+      <UserProfile />
+      <ConnectWalletBox />
+      {/* Komponen game tap, energi, leaderboard, dll */}
+    </main>
+  )
+}
   // Auto points generation
   useEffect(() => {
     if (!isAuthenticated || autoPointsLevel <= 1) return
