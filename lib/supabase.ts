@@ -29,31 +29,29 @@ export const supabase =
 // Helper to check if Supabase is configured
 export const isSupabaseConfigured = () => !!(supabaseUrl && supabaseAnonKey)
 
-// Database types
-export interface UserProfile {
+// Database types matching your existing schema
+export interface User {
   id: string
   line_user_id: string
-  display_name: string
-  picture_url?: string
+  name: string
+  avatar?: string
+  created_at: string
+}
+
+export interface GameStats {
+  id: string
+  user_id: string
   points: number
   energy: number
-  max_energy: number
-  auto_points_level: number
-  energy_per_day_level: number
-  points_per_click_level: number
-  last_energy_depletion_time?: string
-  tomorrow_energy_available: boolean
-  created_at: string
   updated_at: string
 }
 
-export interface GameSession {
-  id: string
-  user_id: string
-  session_start: string
-  session_end?: string
-  points_earned: number
-  clicks_made: number
-  energy_used: number
-  created_at: string
+// Extended game state interface for the app
+export interface ExtendedGameStats extends GameStats {
+  maxEnergy: number
+  autoPointsLevel: number
+  energyPerDayLevel: number
+  pointsPerClickLevel: number
+  tomorrowEnergyAvailable: boolean
+  lastEnergyDepletionTime: string | null
 }

@@ -40,11 +40,11 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
   })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   const supabaseConfigured = isSupabaseConfigured()
 
-  // Load user profile from Supabase or localStorage
+  // Load or create user and game stats
   const loadUserProfile = useCallback(async () => {
     if (!lineUserId) {
       setIsLoading(false)
@@ -56,24 +56,76 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
       setError(null)
 
       if (supabaseConfigured) {
-        // Try to load from Supabase
-        const { data, error } = await supabase.from("user_profiles").select("*").eq("line_user_id", lineUserId).single()
+        // First, get or create user
+        let { data: user, error: userError } = await supabase
+          .from("users")
+          .select("*")
+          .eq("line_user_id", lineUserId)
+          .single()
 
-        if (error && error.code !== "PGRST116") {
-          throw error
+        if (userError && userError.code === "PGRST116") {
+          // User doesn't exist, create one
+          const { data: newUser, error: createError } = await supabase
+            .from("users")
+            .insert({
+              line_user_id: lineUserId,
+              name: "TapCloud Player",
+              avatar: null,
+            })
+            .select()
+            .single()
+
+          if (createError) throw createError
+          user = newUser
+        } else if (userError) {
+          throw userError
         }
 
-        if (data) {
-          setGameState({
-            points: Number.parseFloat(data.points.toString()),
-            energy: data.energy,
-            maxEnergy: data.max_energy,
-            autoPointsLevel: data.auto_points_level,
-            energyPerDayLevel: data.energy_per_day_level,
-            pointsPerClickLevel: data.points_per_click_level,
-            tomorrowEnergyAvailable: data.tomorrow_energy_available,
-            lastEnergyDepletionTime: data.last_energy_depletion_time,
-          })
+        if (user) {
+          setUserId(user.id)
+
+          // Now get or create game stats
+          let { data: gameStats, error: statsError } = await supabase
+            .from("game_stats")
+            .select("*")
+            .eq("user_id", user.id)
+            .single()
+
+          if (statsError && statsError.code === "PGRST116") {
+            // Game stats don't exist, create them
+            const { data: newStats, error: createStatsError } = await supabase
+              .from("game_stats")
+              .insert({
+                user_id: user.id,
+                points: 2.25,
+                energy: 200,
+              })
+              .select()
+              .single()
+
+            if (createStatsError) throw createStatsError
+            gameStats = newStats
+          } else if (statsError) {
+            throw statsError
+          }
+
+          if (gameStats) {
+            // Load extended game state from localStorage (for features not in DB)
+            const localKey = `tapcloud_extended_${user.id}`
+            const localData = localStorage.getItem(localKey)
+            const extended = localData ? JSON.parse(localData) : {}
+
+            setGameState({
+              points: Number.parseFloat(gameStats.points.toString()),
+              energy: gameStats.energy,
+              maxEnergy: extended.maxEnergy || 200,
+              autoPointsLevel: extended.autoPointsLevel || 1,
+              energyPerDayLevel: extended.energyPerDayLevel || 1,
+              pointsPerClickLevel: extended.pointsPerClickLevel || 1,
+              tomorrowEnergyAvailable: extended.tomorrowEnergyAvailable || false,
+              lastEnergyDepletionTime: extended.lastEnergyDepletionTime || null,
+            })
+          }
         }
       } else {
         // Load from localStorage as fallback
@@ -91,31 +143,36 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
     }
   }, [lineUserId, supabaseConfigured])
 
-  // Save to Supabase or localStorage
+  // Save to Supabase and localStorage
   const saveGameState = useCallback(async () => {
     if (!lineUserId) return
 
     try {
       setError(null)
 
-      if (supabaseConfigured) {
-        const profileData = {
-          line_user_id: lineUserId,
-          points: gameState.points,
-          energy: gameState.energy,
-          max_energy: gameState.maxEnergy,
-          auto_points_level: gameState.autoPointsLevel,
-          energy_per_day_level: gameState.energyPerDayLevel,
-          points_per_click_level: gameState.pointsPerClickLevel,
-          tomorrow_energy_available: gameState.tomorrowEnergyAvailable,
-          last_energy_depletion_time: gameState.lastEnergyDepletionTime,
+      if (supabaseConfigured && userId) {
+        // Update game stats in Supabase
+        const { error: statsError } = await supabase
+          .from("game_stats")
+          .update({
+            points: gameState.points,
+            energy: gameState.energy,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId)
+
+        if (statsError) throw statsError
+
+        // Save extended data to localStorage
+        const extendedData = {
+          maxEnergy: gameState.maxEnergy,
+          autoPointsLevel: gameState.autoPointsLevel,
+          energyPerDayLevel: gameState.energyPerDayLevel,
+          pointsPerClickLevel: gameState.pointsPerClickLevel,
+          tomorrowEnergyAvailable: gameState.tomorrowEnergyAvailable,
+          lastEnergyDepletionTime: gameState.lastEnergyDepletionTime,
         }
-
-        const { error } = await supabase.from("user_profiles").upsert(profileData, {
-          onConflict: "line_user_id",
-        })
-
-        if (error) throw error
+        localStorage.setItem(`tapcloud_extended_${userId}`, JSON.stringify(extendedData))
       } else {
         // Save to localStorage as fallback
         localStorage.setItem(`tapcloud_game_${lineUserId}`, JSON.stringify(gameState))
@@ -124,7 +181,7 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
       console.error("Error saving game state:", err)
       setError(supabaseConfigured ? "Failed to save to cloud" : "Saved locally")
     }
-  }, [lineUserId, gameState, supabaseConfigured])
+  }, [lineUserId, gameState, supabaseConfigured, userId])
 
   // Update points
   const updatePoints = useCallback(
@@ -134,11 +191,14 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
       if (!lineUserId) return
 
       try {
-        if (supabaseConfigured) {
+        if (supabaseConfigured && userId) {
           const { error } = await supabase
-            .from("user_profiles")
-            .update({ points: newPoints })
-            .eq("line_user_id", lineUserId)
+            .from("game_stats")
+            .update({
+              points: newPoints,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", userId)
 
           if (error) throw error
         } else {
@@ -155,7 +215,7 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
         setError("Failed to update points")
       }
     },
-    [lineUserId, supabaseConfigured],
+    [lineUserId, supabaseConfigured, userId],
   )
 
   // Update energy
@@ -174,16 +234,24 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
       if (!lineUserId) return
 
       try {
-        if (supabaseConfigured) {
-          const updateData: any = { energy: newEnergy }
-          if (updates.tomorrowEnergyAvailable) {
-            updateData.tomorrow_energy_available = true
-            updateData.last_energy_depletion_time = updates.lastEnergyDepletionTime
-          }
-
-          const { error } = await supabase.from("user_profiles").update(updateData).eq("line_user_id", lineUserId)
+        if (supabaseConfigured && userId) {
+          const { error } = await supabase
+            .from("game_stats")
+            .update({
+              energy: newEnergy,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", userId)
 
           if (error) throw error
+
+          // Update extended data in localStorage
+          if (updates.tomorrowEnergyAvailable) {
+            const extendedData = JSON.parse(localStorage.getItem(`tapcloud_extended_${userId}`) || "{}")
+            extendedData.tomorrowEnergyAvailable = true
+            extendedData.lastEnergyDepletionTime = updates.lastEnergyDepletionTime
+            localStorage.setItem(`tapcloud_extended_${userId}`, JSON.stringify(extendedData))
+          }
         } else {
           // Update localStorage
           const savedData = localStorage.getItem(`tapcloud_game_${lineUserId}`)
@@ -202,7 +270,7 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
         setError("Failed to update energy")
       }
     },
-    [lineUserId, gameState.energy, gameState.tomorrowEnergyAvailable, supabaseConfigured],
+    [lineUserId, gameState.energy, gameState.tomorrowEnergyAvailable, supabaseConfigured, userId],
   )
 
   // Upgrade levels
@@ -231,25 +299,22 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
       if (!lineUserId) return
 
       try {
-        if (supabaseConfigured) {
-          const updateData: any = { points: newPoints }
-
-          switch (type) {
-            case "auto":
-              updateData.auto_points_level = updates.autoPointsLevel
-              break
-            case "energy":
-              updateData.energy_per_day_level = updates.energyPerDayLevel
-              updateData.max_energy = updates.maxEnergy
-              break
-            case "click":
-              updateData.points_per_click_level = updates.pointsPerClickLevel
-              break
-          }
-
-          const { error } = await supabase.from("user_profiles").update(updateData).eq("line_user_id", lineUserId)
+        if (supabaseConfigured && userId) {
+          // Update points in Supabase
+          const { error } = await supabase
+            .from("game_stats")
+            .update({
+              points: newPoints,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", userId)
 
           if (error) throw error
+
+          // Update extended data in localStorage
+          const extendedData = JSON.parse(localStorage.getItem(`tapcloud_extended_${userId}`) || "{}")
+          Object.assign(extendedData, updates)
+          localStorage.setItem(`tapcloud_extended_${userId}`, JSON.stringify(extendedData))
         } else {
           // Update localStorage
           const savedData = localStorage.getItem(`tapcloud_game_${lineUserId}`)
@@ -264,7 +329,7 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
         setError("Failed to upgrade")
       }
     },
-    [lineUserId, gameState, supabaseConfigured],
+    [lineUserId, gameState, supabaseConfigured, userId],
   )
 
   // Claim tomorrow energy
@@ -280,17 +345,22 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
     if (!lineUserId) return
 
     try {
-      if (supabaseConfigured) {
+      if (supabaseConfigured && userId) {
         const { error } = await supabase
-          .from("user_profiles")
+          .from("game_stats")
           .update({
             energy: gameState.maxEnergy,
-            tomorrow_energy_available: false,
-            last_energy_depletion_time: null,
+            updated_at: new Date().toISOString(),
           })
-          .eq("line_user_id", lineUserId)
+          .eq("user_id", userId)
 
         if (error) throw error
+
+        // Update extended data in localStorage
+        const extendedData = JSON.parse(localStorage.getItem(`tapcloud_extended_${userId}`) || "{}")
+        extendedData.tomorrowEnergyAvailable = false
+        extendedData.lastEnergyDepletionTime = null
+        localStorage.setItem(`tapcloud_extended_${userId}`, JSON.stringify(extendedData))
       } else {
         // Update localStorage
         const savedData = localStorage.getItem(`tapcloud_game_${lineUserId}`)
@@ -304,67 +374,23 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
       console.error("Error claiming tomorrow energy:", err)
       setError("Failed to claim energy")
     }
-  }, [lineUserId, gameState.maxEnergy, supabaseConfigured])
+  }, [lineUserId, gameState.maxEnergy, supabaseConfigured, userId])
 
-  // Start game session (only if Supabase is configured)
+  // Start game session (simplified - just return a mock ID since we don't have sessions table)
   const startGameSession = useCallback(async (): Promise<string | null> => {
     if (!lineUserId || !supabaseConfigured) return null
-
-    try {
-      // Get user profile ID
-      const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("id")
-        .eq("line_user_id", lineUserId)
-        .single()
-
-      if (!profile) return null
-
-      const { data, error } = await supabase
-        .from("game_sessions")
-        .insert({
-          user_id: profile.id,
-          session_start: new Date().toISOString(),
-        })
-        .select("id")
-        .single()
-
-      if (error) throw error
-
-      setCurrentSessionId(data.id)
-      return data.id
-    } catch (err) {
-      console.error("Error starting game session:", err)
-      return null
-    }
+    // Return a simple session ID for tracking
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }, [lineUserId, supabaseConfigured])
 
-  // End game session (only if Supabase is configured)
+  // End game session (simplified - just log for now)
   const endGameSession = useCallback(
     async (sessionId: string, pointsEarned: number, clicksMade: number, energyUsed: number) => {
       if (!supabaseConfigured) return
-
-      try {
-        const { error } = await supabase
-          .from("game_sessions")
-          .update({
-            session_end: new Date().toISOString(),
-            points_earned: pointsEarned,
-            clicks_made: clicksMade,
-            energy_used: energyUsed,
-          })
-          .eq("id", sessionId)
-
-        if (error) throw error
-
-        if (currentSessionId === sessionId) {
-          setCurrentSessionId(null)
-        }
-      } catch (err) {
-        console.error("Error ending game session:", err)
-      }
+      // Log session data (could be extended to save to a sessions table later)
+      console.log("Session ended:", { sessionId, pointsEarned, clicksMade, energyUsed })
     },
-    [currentSessionId, supabaseConfigured],
+    [supabaseConfigured],
   )
 
   // Load profile when lineUserId changes
@@ -391,11 +417,14 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
           const newEnergy = Math.min(prev.energy + 1, prev.maxEnergy)
           // Update in database/localStorage
           if (lineUserId) {
-            if (supabaseConfigured) {
+            if (supabaseConfigured && userId) {
               supabase
-                .from("user_profiles")
-                .update({ energy: newEnergy })
-                .eq("line_user_id", lineUserId)
+                .from("game_stats")
+                .update({
+                  energy: newEnergy,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("user_id", userId)
                 .then(({ error }) => {
                   if (error) console.error("Error updating energy:", error)
                 })
@@ -427,17 +456,12 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
             }
 
             if (lineUserId) {
-              if (supabaseConfigured) {
-                supabase
-                  .from("user_profiles")
-                  .update({
-                    tomorrow_energy_available: false,
-                    last_energy_depletion_time: null,
-                  })
-                  .eq("line_user_id", lineUserId)
-                  .then(({ error }) => {
-                    if (error) console.error("Error resetting tomorrow energy:", error)
-                  })
+              if (supabaseConfigured && userId) {
+                // Update extended data in localStorage
+                const extendedData = JSON.parse(localStorage.getItem(`tapcloud_extended_${userId}`) || "{}")
+                extendedData.tomorrowEnergyAvailable = false
+                extendedData.lastEnergyDepletionTime = null
+                localStorage.setItem(`tapcloud_extended_${userId}`, JSON.stringify(extendedData))
               } else {
                 const savedData = localStorage.getItem(`tapcloud_game_${lineUserId}`)
                 if (savedData) {
@@ -457,7 +481,7 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
     }, 3000)
 
     return () => clearInterval(interval)
-  }, [lineUserId, supabaseConfigured])
+  }, [lineUserId, supabaseConfigured, userId])
 
   return {
     ...gameState,
