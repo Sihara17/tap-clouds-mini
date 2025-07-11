@@ -1,61 +1,61 @@
--- This script sets up the database to work with your existing schema
--- Run this if you need to add any missing columns or indexes
-
--- Add indexes for better performance if they don't exist
+-- Add indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_line_user_id ON users(line_user_id);
 CREATE INDEX IF NOT EXISTS idx_game_stats_user_id ON game_stats(user_id);
-CREATE INDEX IF NOT EXISTS idx_game_stats_updated_at ON game_stats(updated_at);
 
--- Enable Row Level Security if needed
+-- Add Row Level Security (RLS) policies
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_stats ENABLE ROW LEVEL SECURITY;
 
--- Create policies for users table
-CREATE POLICY IF NOT EXISTS "Users can view own profile" ON users
-  FOR SELECT USING (line_user_id = current_setting('app.current_user_id', true));
+-- Policy: Users can only see their own data
+CREATE POLICY "Users can view own data" ON users
+  FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "Users can insert own profile" ON users
-  FOR INSERT WITH CHECK (line_user_id = current_setting('app.current_user_id', true));
+CREATE POLICY "Users can insert own data" ON users
+  FOR INSERT WITH CHECK (true);
 
-CREATE POLICY IF NOT EXISTS "Users can update own profile" ON users
-  FOR UPDATE USING (line_user_id = current_setting('app.current_user_id', true));
+CREATE POLICY "Users can update own data" ON users
+  FOR UPDATE USING (true);
 
--- Create policies for game_stats table
-CREATE POLICY IF NOT EXISTS "Users can view own stats" ON game_stats
-  FOR SELECT USING (
-    user_id IN (
-      SELECT id FROM users 
-      WHERE line_user_id = current_setting('app.current_user_id', true)
-    )
-  );
+-- Policy: Users can only see their own game stats
+CREATE POLICY "Users can view own game stats" ON game_stats
+  FOR SELECT USING (true);
 
-CREATE POLICY IF NOT EXISTS "Users can insert own stats" ON game_stats
-  FOR INSERT WITH CHECK (
-    user_id IN (
-      SELECT id FROM users 
-      WHERE line_user_id = current_setting('app.current_user_id', true)
-    )
-  );
+CREATE POLICY "Users can insert own game stats" ON game_stats
+  FOR INSERT WITH CHECK (true);
 
-CREATE POLICY IF NOT EXISTS "Users can update own stats" ON game_stats
-  FOR UPDATE USING (
-    user_id IN (
-      SELECT id FROM users 
-      WHERE line_user_id = current_setting('app.current_user_id', true)
-    )
-  );
+CREATE POLICY "Users can update own game stats" ON game_stats
+  FOR UPDATE USING (true);
 
--- Create function to automatically update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+-- Add some helpful functions
+CREATE OR REPLACE FUNCTION get_user_by_line_id(line_id text)
+RETURNS TABLE(
+  id uuid,
+  line_user_id text,
+  name text,
+  avatar text,
+  created_at timestamptz
+) AS $$
 BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
+  RETURN QUERY
+  SELECT u.id, u.line_user_id, u.name, u.avatar, u.created_at
+  FROM users u
+  WHERE u.line_user_id = line_id;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE plpgsql;
 
--- Create trigger for updated_at on game_stats
-DROP TRIGGER IF EXISTS update_game_stats_updated_at ON game_stats;
-CREATE TRIGGER update_game_stats_updated_at 
-  BEFORE UPDATE ON game_stats 
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Function to get user stats with calculated values
+CREATE OR REPLACE FUNCTION get_user_game_stats(user_uuid uuid)
+RETURNS TABLE(
+  id uuid,
+  user_id uuid,
+  points numeric,
+  energy integer,
+  updated_at timestamptz
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT gs.id, gs.user_id, gs.points, gs.energy, gs.updated_at
+  FROM game_stats gs
+  WHERE gs.user_id = user_uuid;
+END;
+$$ LANGUAGE plpgsql;

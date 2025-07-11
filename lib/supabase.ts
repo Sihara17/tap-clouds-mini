@@ -1,33 +1,13 @@
 import { createClient } from "@supabase/supabase-js"
 
-// Check if environment variables are available
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = "https://eumqhcelzschlofoauac.supabase.co"
+const supabaseAnonKey =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1bXFoY2VsenNjaGxvZm9hdWFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg3MDQzNDEsImV4cCI6MjA2NDI4MDM0MX0.T2MYJCMmIqRsg53R5BQYjF4VS6kpkI5Lm4cIaoLfvuM"
 
-// Create a mock client for development when env vars are missing
-const createMockClient = () => ({
-  from: () => ({
-    select: () => ({
-      eq: () => ({
-        single: () =>
-          Promise.resolve({ data: null, error: { code: "MOCK_ERROR", message: "Supabase not configured" } }),
-      }),
-    }),
-    insert: () => ({
-      select: () => ({ single: () => Promise.resolve({ data: null, error: { message: "Supabase not configured" } }) }),
-    }),
-    update: () => ({ eq: () => Promise.resolve({ error: { message: "Supabase not configured" } }) }),
-    upsert: () => Promise.resolve({ error: { message: "Supabase not configured" } }),
-  }),
-  rpc: () => Promise.resolve({ error: { message: "Supabase not configured" } }),
-})
-
-// Export either real client or mock client
-export const supabase =
-  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : (createMockClient() as any)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Helper to check if Supabase is configured
-export const isSupabaseConfigured = () => !!(supabaseUrl && supabaseAnonKey)
+export const isSupabaseConfigured = () => true
 
 // Database types matching your existing schema
 export interface User {
