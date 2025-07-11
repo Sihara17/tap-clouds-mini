@@ -29,7 +29,7 @@ interface UseSupabaseGameReturn extends GameState {
 
 export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameReturn {
   const [gameState, setGameState] = useState<GameState>({
-    points: 2.25,
+    points: 0,
     energy: 200,
     maxEnergy: 200,
     autoPointsLevel: 1,
