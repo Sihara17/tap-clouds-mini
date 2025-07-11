@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { LogOut, User } from "lucide-react"
+import { LogOut, User, Wallet } from "lucide-react"
 import { useLineAuth } from "@/hooks/use-line-auth"
 
 export function UserProfile() {
@@ -27,6 +27,16 @@ export function UserProfile() {
             <div>
               <h3 className="text-white font-semibold">{user.displayName}</h3>
               {user.statusMessage && <p className="text-gray-400 text-sm">{user.statusMessage}</p>}
+              {user.walletAddress && (
+                <div className="mt-1 flex items-center text-sm text-green-400">
+                  <Wallet className="h-4 w-4 mr-1" />
+                  <span className="truncate max-w-[200px]">{user.walletAddress}</span>
+                  {user.walletType && <span className="ml-2 text-cyan-400">({user.walletType})</span>}
+                </div>
+              )}
+              {!user.walletAddress && (
+                <p className="text-sm text-yellow-300 mt-1">Belum menghubungkan wallet</p>
+              )}
             </div>
           </div>
           <Button
