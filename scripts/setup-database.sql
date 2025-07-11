@@ -1,61 +1,47 @@
 -- Add indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_line_user_id ON users(line_user_id);
 CREATE INDEX IF NOT EXISTS idx_game_stats_user_id ON game_stats(user_id);
+CREATE INDEX IF NOT EXISTS idx_game_stats_updated_at ON game_stats(updated_at);
 
--- Add Row Level Security (RLS) policies
+-- Enable Row Level Security
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_stats ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can only see their own data
-CREATE POLICY "Users can view own data" ON users
+-- Create policies for users table
+CREATE POLICY "Users can view their own data" ON users
   FOR SELECT USING (true);
 
-CREATE POLICY "Users can insert own data" ON users
+CREATE POLICY "Users can insert their own data" ON users
   FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "Users can update own data" ON users
+CREATE POLICY "Users can update their own data" ON users
   FOR UPDATE USING (true);
 
--- Policy: Users can only see their own game stats
-CREATE POLICY "Users can view own game stats" ON game_stats
+-- Create policies for game_stats table
+CREATE POLICY "Users can view their own game stats" ON game_stats
   FOR SELECT USING (true);
 
-CREATE POLICY "Users can insert own game stats" ON game_stats
+CREATE POLICY "Users can insert their own game stats" ON game_stats
   FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "Users can update own game stats" ON game_stats
+CREATE POLICY "Users can update their own game stats" ON game_stats
   FOR UPDATE USING (true);
 
--- Add some helpful functions
+-- Add helpful functions
 CREATE OR REPLACE FUNCTION get_user_by_line_id(line_id text)
-RETURNS TABLE(
-  id uuid,
-  line_user_id text,
-  name text,
-  avatar text,
-  created_at timestamptz
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT u.id, u.line_user_id, u.name, u.avatar, u.created_at
-  FROM users u
-  WHERE u.line_user_id = line_id;
-END;
-$$ LANGUAGE plpgsql;
+RETURNS TABLE(id uuid, line_user_id text, name text, avatar text, created_at timestamptz)
+LANGUAGE sql
+AS $$
+  SELECT id, line_user_id, name, avatar, created_at
+  FROM users
+  WHERE line_user_id = line_id;
+$$;
 
--- Function to get user stats with calculated values
-CREATE OR REPLACE FUNCTION get_user_game_stats(user_uuid uuid)
-RETURNS TABLE(
-  id uuid,
-  user_id uuid,
-  points numeric,
-  energy integer,
-  updated_at timestamptz
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT gs.id, gs.user_id, gs.points, gs.energy, gs.updated_at
-  FROM game_stats gs
-  WHERE gs.user_id = user_uuid;
-END;
-$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION get_game_stats_by_user_id(user_uuid uuid)
+RETURNS TABLE(id uuid, user_id uuid, points numeric, energy integer, updated_at timestamptz)
+LANGUAGE sql
+AS $$
+  SELECT id, user_id, points, energy, updated_at
+  FROM game_stats
+  WHERE user_id = user_uuid;
+$$;
