@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Cloud, Home, Zap, Target, Loader2, Database, AlertTriangle } from "lucide-react"
 import { useLineAuth } from "@/hooks/use-line-auth"
 import { useSupabaseGame } from "@/hooks/use-supabase-game"
-import { UserProfile } from "@/components/UserProfile"
+import { UserProfile } from "@/components/user-profile" // ✅
 import { ConnectWalletBox } from "@/components/ConnectWalletBox"
 
 export default function TapCloudApp() {
