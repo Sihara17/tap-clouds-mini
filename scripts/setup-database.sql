@@ -7,6 +7,10 @@ CREATE INDEX IF NOT EXISTS idx_game_stats_updated_at ON game_stats(updated_at);
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_stats ENABLE ROW LEVEL SECURITY;
 
+-- Tambah kolom wallet_address
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS wallet_address TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS wallet_type TEXT;
+
 -- Create policies for users table
 CREATE POLICY "Users can view their own data" ON users
   FOR SELECT USING (true);
