@@ -3,7 +3,7 @@
 
 import { createConfig, http } from "wagmi"
 import { mainnet } from "wagmi/chains"
-import { InjectedConnector } from "wagmi/connectors/injected"
+import { InjectedConnector } from "@wagmi/connectors"
 
 export const config = createConfig({
   chains: [mainnet],
