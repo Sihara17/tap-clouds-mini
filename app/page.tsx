@@ -14,23 +14,24 @@ export default function TapCloudApp() {
   const { isAuthenticated, user, login, isLoading: authLoading, error: authError } = useLineAuth()
 
   const {
-    points,
-    energy,
-    maxEnergy,
-    autoPointsLevel,
-    energyPerDayLevel,
-    pointsPerClickLevel,
-    tomorrowEnergyAvailable,
-    isLoading: gameLoading,
-    error: gameError,
-    isSupabaseConfigured,
-    updatePoints,
-    updateEnergy,
-    upgradeLevel,
-    claimTomorrowEnergy,
-    startGameSession,
-    endGameSession,
-  } = useSupabaseGame(user?.userId || null)
+  points,
+  energy,
+  maxEnergy,
+  autoPointsLevel,
+  energyPerDayLevel,
+  pointsPerClickLevel,
+  tomorrowEnergyAvailable,
+  isLoading: gameLoading,
+  error: gameError,
+  isSupabaseConfigured,
+  updatePoints,
+  updateEnergy,
+  upgradeLevel,
+  claimTomorrowEnergy,
+  startGameSession,
+  endGameSession,
+} = useSupabaseGame()
+
 
   const [sessionStats, setSessionStats] = useState({
     sessionId: null as string | null,
