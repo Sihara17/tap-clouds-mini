@@ -1,62 +1,39 @@
 // components/ConnectWalletBox.tsx
 "use client"
 
-import { useWalletConnect } from "@/hooks/use-wallet-connect"
-import { useLineAuth } from "@/hooks/use-line-auth"
-import { useState } from "react"
-import { Button } from "./ui/button"
-import { Card, CardContent } from "./ui/card"
-import { createClient } from "@/lib/supabase"
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { useAccount, useConnect } from "wagmi"
+import { injected } from "@wagmi/connectors"
+import { supabase } from "@/lib/supabase"
 
 export function ConnectWalletBox() {
-  const { user, isAuthenticated } = useLineAuth()
-  const { walletAddress, walletType, connectWallet } = useWalletConnect()
-  const [loading, setLoading] = useState(false)
+  const { connect } = useConnect()
+  const { address, isConnected } = useAccount()
+  const [connected, setConnected] = useState(false)
 
-  const handleConnect = async () => {
-    if (!user) return
-    setLoading(true)
-
-    const message = `Connect TapCloud Wallet for ${user.displayName}`
-    const result = await connectWallet(message)
-
-    if (result) {
-      const supabase = createClient()
-      await supabase
-        .from("user_profiles")
-        .update({
-          wallet_address: result.account,
-          wallet_type: result.type,
-        })
-        .eq("line_user_id", user.lineUserId)
+  useEffect(() => {
+    if (isConnected) {
+      setConnected(true)
+      saveWalletToSupabase(address!)
     }
+  }, [isConnected, address])
 
-    setLoading(false)
+  const saveWalletToSupabase = async (walletAddress: string) => {
+    const { data, error } = await supabase
+      .from("wallets") // pastikan tabel "wallets" ada di Supabase
+      .upsert({ address: walletAddress })
+
+    if (error) console.error("Supabase save error:", error)
   }
 
-  if (!isAuthenticated || !user) return null
+  if (connected) {
+    return <p className="text-sm">Wallet Connected: {address}</p>
+  }
 
   return (
-    <Card className="bg-slate-800/50 border-cyan-500/30 mt-4">
-      <CardContent className="p-4">
-        <div className="flex flex-col space-y-2">
-          {walletAddress ? (
-            <>
-              <p className="text-white text-sm">Connected Wallet:</p>
-              <p className="text-cyan-400 text-xs break-all">{walletAddress}</p>
-              <p className="text-gray-400 text-xs">Type: {walletType}</p>
-            </>
-          ) : (
-            <Button
-              onClick={handleConnect}
-              disabled={loading}
-              className="bg-cyan-600 hover:bg-cyan-700 text-white"
-            >
-              {loading ? "Connecting..." : "Connect Wallet"}
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <Button onClick={() => connect({ connector: injected() })}>
+      Connect Wallet
+    </Button>
   )
 }
