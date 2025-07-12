@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 interface GameState {
   points: number
@@ -42,7 +42,7 @@ export function useSupabaseGame(lineUserId: string | null): UseSupabaseGameRetur
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
 
-  const supabaseConfigured = isSupabaseConfigured()
+  const supabaseConfigured = !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   // Load or create user and game stats
   const loadUserProfile = useCallback(async () => {
