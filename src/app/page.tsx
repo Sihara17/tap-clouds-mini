@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Cloud, Home, Loader2, Database, AlertTriangle } from "lucide-react"
@@ -12,7 +12,6 @@ import { ConnectWalletBox } from "@/components/ConnectWalletBox"
 export default function TapCloudApp() {
   const [currentScreen, setCurrentScreen] = useState("main")
   const { isAuthenticated, user, login, isLoading: authLoading, error: authError } = useLineAuth()
-
   const {
     points,
     energy,
@@ -39,11 +38,43 @@ export default function TapCloudApp() {
     energyUsed: 0,
   })
 
+  // Use refs to track values without causing re-renders
+  const sessionStatsRef = useRef(sessionStats)
+  const pointsRef = useRef(points)
+
+  // Update refs when state changes
+  useEffect(() => {
+    sessionStatsRef.current = sessionStats
+  }, [sessionStats])
+
+  useEffect(() => {
+    pointsRef.current = points
+  }, [points])
+
+  // Memoize the update functions to prevent infinite loops
+  const updatePointsCallback = useCallback(
+    (newPoints: number) => {
+      updatePoints(newPoints)
+    },
+    [updatePoints],
+  )
+
+  const updateEnergyCallback = useCallback(
+    (newEnergy: number) => {
+      updateEnergy(newEnergy)
+    },
+    [updateEnergy],
+  )
+
+  // Auto points generation - fixed infinite loop
   useEffect(() => {
     if (!isAuthenticated || autoPointsLevel <= 1) return
 
     const interval = setInterval(() => {
-      updatePoints(points + 0.1)
+      const currentPoints = pointsRef.current
+      const newPoints = currentPoints + 0.1
+      updatePointsCallback(newPoints)
+
       setSessionStats((prev) => ({
         ...prev,
         pointsEarned: prev.pointsEarned + 0.1,
@@ -51,52 +82,68 @@ export default function TapCloudApp() {
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [autoPointsLevel, points, updatePoints, isAuthenticated])
+  }, [autoPointsLevel, isAuthenticated, updatePointsCallback]) // Removed points dependency
 
+  // Start game session - fixed infinite loop
   useEffect(() => {
     if (isAuthenticated && user && !sessionStats.sessionId && isSupabaseConfigured) {
-      startGameSession().then((sessionId) => {
-        if (sessionId) {
-          setSessionStats((prev) => ({ ...prev, sessionId }))
-        }
-      })
+      startGameSession()
+        .then((sessionId) => {
+          if (sessionId) {
+            setSessionStats((prev) => ({ ...prev, sessionId }))
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to start game session:", error)
+        })
     }
-  }, [isAuthenticated, user, sessionStats.sessionId, startGameSession, isSupabaseConfigured])
+  }, [isAuthenticated, user, isSupabaseConfigured, startGameSession]) // Use user object instead of user.id
 
+  // Cleanup session on unmount
   useEffect(() => {
     return () => {
-      if (sessionStats.sessionId && isSupabaseConfigured) {
+      const currentStats = sessionStatsRef.current
+      if (currentStats.sessionId && isSupabaseConfigured) {
         endGameSession(
-          sessionStats.sessionId,
-          sessionStats.pointsEarned,
-          sessionStats.clicksMade,
-          sessionStats.energyUsed,
-        )
+          currentStats.sessionId,
+          currentStats.pointsEarned,
+          currentStats.clicksMade,
+          currentStats.energyUsed,
+        ).catch((error) => {
+          console.error("Failed to end game session:", error)
+        })
       }
     }
-  }, [sessionStats, endGameSession, isSupabaseConfigured])
+  }, [endGameSession, isSupabaseConfigured])
 
-  const handleCloudClick = async () => {
+  const handleCloudClick = useCallback(async () => {
     if (energy > 0) {
       const pointsToAdd = pointsPerClickLevel > 1 ? 2.0 : 1.0
       const newPoints = points + pointsToAdd
       const newEnergy = energy - 1
 
-      await updatePoints(newPoints)
-      await updateEnergy(newEnergy)
+      try {
+        await Promise.all([updatePointsCallback(newPoints), updateEnergyCallback(newEnergy)])
 
-      setSessionStats((prev) => ({
-        ...prev,
-        pointsEarned: prev.pointsEarned + pointsToAdd,
-        clicksMade: prev.clicksMade + 1,
-        energyUsed: prev.energyUsed + 1,
-      }))
+        setSessionStats((prev) => ({
+          ...prev,
+          pointsEarned: prev.pointsEarned + pointsToAdd,
+          clicksMade: prev.clicksMade + 1,
+          energyUsed: prev.energyUsed + 1,
+        }))
+      } catch (error) {
+        console.error("Failed to update game state:", error)
+      }
     }
-  }
+  }, [energy, points, pointsPerClickLevel, updatePointsCallback, updateEnergyCallback])
 
-  const handleClaimTomorrowEnergy = async () => {
-    await claimTomorrowEnergy()
-  }
+  const handleClaimTomorrowEnergy = useCallback(async () => {
+    try {
+      await claimTomorrowEnergy()
+    } catch (error) {
+      console.error("Failed to claim tomorrow energy:", error)
+    }
+  }, [claimTomorrowEnergy])
 
   const MainScreen = () => (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-slate-900 via-purple-900 to-slate-900 text-white p-4 relative overflow-hidden">
@@ -134,7 +181,10 @@ export default function TapCloudApp() {
         {!isSupabaseConfigured && (
           <Card className="bg-yellow-900/50 border-yellow-500/30 w-full">
             <CardContent className="p-4 text-yellow-200 text-xs">
-              <p><strong>⚠️ Supabase not configured:</strong> Game data is saved locally and will be lost when you clear browser data.</p>
+              <p>
+                <strong>⚠️ Supabase not configured:</strong> Game data is saved locally and will be lost when you clear
+                browser data.
+              </p>
             </CardContent>
           </Card>
         )}
@@ -148,7 +198,9 @@ export default function TapCloudApp() {
 
         <div className="text-center space-y-2">
           <div className="text-2xl text-cyan-300">Points: {points.toFixed(2)}</div>
-          <div className="text-lg text-gray-300">Energy: {energy} / {maxEnergy}</div>
+          <div className="text-lg text-gray-300">
+            Energy: {energy} / {maxEnergy}
+          </div>
           {gameError && <div className="text-red-400 text-sm">⚠️ {gameError}</div>}
         </div>
 
@@ -209,7 +261,7 @@ export default function TapCloudApp() {
             ) : (
               <>
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="..." />
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                 </svg>
                 Login with LINE
               </>
