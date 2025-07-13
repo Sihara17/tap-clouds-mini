@@ -10,8 +10,8 @@ import { UserProfile } from "@/components/user-profile"
 import { ConnectWalletBox } from "@/components/ConnectWalletBox"
 
 export default function TapCloudApp() {
-  const [currentScreen, setCurrentScreen] = useState("main")
   const { isAuthenticated, user, login, isLoading: authLoading, error: authError } = useLineAuth()
+  const [currentScreen, setCurrentScreen] = useState("main")
   const {
     points,
     energy,
