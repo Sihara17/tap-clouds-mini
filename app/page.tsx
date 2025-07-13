@@ -1,49 +1,36 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Cloud, Home, Zap, Target, Loader2, Database, AlertTriangle } from "lucide-react"
+import { Cloud, Home, Loader2, Database, AlertTriangle } from "lucide-react"
 import { useLineAuth } from "@/hooks/use-line-auth"
 import { useSupabaseGame } from "@/hooks/use-supabase-game"
-import { UserProfile } from "@/components/user-profile" // ✅
+import { UserProfile } from "@/components/user-profile"
 import { ConnectWalletBox } from "@/components/ConnectWalletBox"
-import { Suspense } from 'react'
-import { SearchParamComponent } from '@/components/SearchParamComponent'
 
-export default function Page() {
-  return (
-    <div>
-      <h1>Home Page</h1>
-      <Suspense fallback={<div>Loading search...</div>}>
-        <SearchParamComponent />
-      </Suspense>
-    </div>
-  )
-}
 export default function TapCloudApp() {
   const [currentScreen, setCurrentScreen] = useState("main")
   const { isAuthenticated, user, login, isLoading: authLoading, error: authError } = useLineAuth()
 
   const {
-  points,
-  energy,
-  maxEnergy,
-  autoPointsLevel,
-  energyPerDayLevel,
-  pointsPerClickLevel,
-  tomorrowEnergyAvailable,
-  isLoading: gameLoading,
-  error: gameError,
-  isSupabaseConfigured,
-  updatePoints,
-  updateEnergy,
-  upgradeLevel,
-  claimTomorrowEnergy,
-  startGameSession,
-  endGameSession,
-} = useSupabaseGame()
-
+    points,
+    energy,
+    maxEnergy,
+    autoPointsLevel,
+    energyPerDayLevel,
+    pointsPerClickLevel,
+    tomorrowEnergyAvailable,
+    isLoading: gameLoading,
+    error: gameError,
+    isSupabaseConfigured,
+    updatePoints,
+    updateEnergy,
+    upgradeLevel,
+    claimTomorrowEnergy,
+    startGameSession,
+    endGameSession,
+  } = useSupabaseGame()
 
   const [sessionStats, setSessionStats] = useState({
     sessionId: null as string | null,
@@ -52,7 +39,6 @@ export default function TapCloudApp() {
     energyUsed: 0,
   })
 
-  // Auto points generation
   useEffect(() => {
     if (!isAuthenticated || autoPointsLevel <= 1) return
 
@@ -67,7 +53,6 @@ export default function TapCloudApp() {
     return () => clearInterval(interval)
   }, [autoPointsLevel, points, updatePoints, isAuthenticated])
 
-  // Start game session when user logs in (only if Supabase is configured)
   useEffect(() => {
     if (isAuthenticated && user && !sessionStats.sessionId && isSupabaseConfigured) {
       startGameSession().then((sessionId) => {
@@ -78,7 +63,6 @@ export default function TapCloudApp() {
     }
   }, [isAuthenticated, user, sessionStats.sessionId, startGameSession, isSupabaseConfigured])
 
-  // End session on unmount
   useEffect(() => {
     return () => {
       if (sessionStats.sessionId && isSupabaseConfigured) {
@@ -110,16 +94,6 @@ export default function TapCloudApp() {
     }
   }
 
-  const handleUpgrade = async (type: "auto" | "energy" | "click") => {
-    if (points >= 5000) {
-      await upgradeLevel(type)
-      setSessionStats((prev) => ({
-        ...prev,
-        pointsEarned: prev.pointsEarned - 5000,
-      }))
-    }
-  }
-
   const handleClaimTomorrowEnergy = async () => {
     await claimTomorrowEnergy()
   }
@@ -143,7 +117,6 @@ export default function TapCloudApp() {
       <div className="z-10 flex flex-col items-center space-y-8 w-full max-w-md">
         <h1 className="text-4xl font-bold text-cyan-400 mb-4">TapCloud</h1>
 
-        {/* Supabase Status */}
         <div className="flex items-center space-x-2 text-sm">
           {isSupabaseConfigured ? (
             <>
@@ -158,7 +131,6 @@ export default function TapCloudApp() {
           )}
         </div>
 
-        {/* Supabase Warning */}
         {!isSupabaseConfigured && (
           <Card className="bg-yellow-900/50 border-yellow-500/30 w-full">
             <CardContent className="p-4 text-yellow-200 text-xs">
@@ -167,7 +139,6 @@ export default function TapCloudApp() {
           </Card>
         )}
 
-        {/* User Info */}
         {isAuthenticated && (
           <>
             <UserProfile />
@@ -175,14 +146,12 @@ export default function TapCloudApp() {
           </>
         )}
 
-        {/* Game Stats */}
         <div className="text-center space-y-2">
           <div className="text-2xl text-cyan-300">Points: {points.toFixed(2)}</div>
           <div className="text-lg text-gray-300">Energy: {energy} / {maxEnergy}</div>
           {gameError && <div className="text-red-400 text-sm">⚠️ {gameError}</div>}
         </div>
 
-        {/* Tappable Cloud */}
         <div
           className="relative w-64 h-64 cursor-pointer transform transition-transform hover:scale-105 active:scale-95"
           onClick={handleCloudClick}
@@ -204,7 +173,6 @@ export default function TapCloudApp() {
           </Button>
         )}
 
-        {/* Session Stats */}
         {isAuthenticated && sessionStats.sessionId && isSupabaseConfigured && (
           <Card className="bg-slate-800/50 border-cyan-500/30 w-full">
             <CardContent className="p-4">
@@ -227,7 +195,6 @@ export default function TapCloudApp() {
           </Card>
         )}
 
-        {/* LINE Login */}
         {!isAuthenticated ? (
           <Button
             className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-full text-lg font-semibold flex items-center gap-2"
@@ -265,10 +232,6 @@ export default function TapCloudApp() {
   return (
     <div className="relative">
       {currentScreen === "main" && <MainScreen />}
-
-      {/* Tambahkan screen lainnya seperti Upgrades atau Quest jika perlu */}
-      
-      {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-slate-800/90 backdrop-blur-sm border-t border-slate-700">
         <div className="flex justify-around items-center py-3">
           <Button
