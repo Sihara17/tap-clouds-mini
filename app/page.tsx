@@ -8,7 +8,19 @@ import { useLineAuth } from "@/hooks/use-line-auth"
 import { useSupabaseGame } from "@/hooks/use-supabase-game"
 import { UserProfile } from "@/components/user-profile" // ✅
 import { ConnectWalletBox } from "@/components/ConnectWalletBox"
+import { Suspense } from 'react'
+import { SearchParamComponent } from '@/components/SearchParamComponent'
 
+export default function Page() {
+  return (
+    <div>
+      <h1>Home Page</h1>
+      <Suspense fallback={<div>Loading search...</div>}>
+        <SearchParamComponent />
+      </Suspense>
+    </div>
+  )
+}
 export default function TapCloudApp() {
   const [currentScreen, setCurrentScreen] = useState("main")
   const { isAuthenticated, user, login, isLoading: authLoading, error: authError } = useLineAuth()
